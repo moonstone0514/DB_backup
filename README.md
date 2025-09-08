@@ -87,13 +87,13 @@ CREATE TABLE EMP (
    ```bash
    crontab -e
    ```
-2. 매일 정오 실행
+2. 새벽 2시 실행
 
    ```
-   0 12 * * * /home/ubuntu/backup.sh >> /home/ubuntu/backup.log 2>&1
+   0 2 * * * /home/ubuntu/backup.sh >> /home/ubuntu/backup.log 2>&1
    ```
 
-* `0 12 * * *` → 매일 12:00 실행
+* `0 2 * * *` → 매일 2:00 실행
 * `>> ... 2>&1` → 표준 출력과 에러 로그를 파일에 저장
 
 ### 장점
