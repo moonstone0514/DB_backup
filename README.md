@@ -1,185 +1,125 @@
-## 1. 프로젝트 개요
+# MySQL Backup Automation
 
-DB\_backup 프로젝트는 **데이터 무결성 보장**과 **장애 대비**를 목적으로,
+## 📌 프로젝트 개요
+본 프로젝트는 MySQL 데이터베이스 백업 자동화 환경을 구축한 사례입니다.  
+사원 데이터(부서, 급여, 보너스 등)를 포함한 중요한 업무용 DB를 대상으로, 주기적인 전체 논리 백업을 수행하고 안전하게 보관하는 것을 목표로 합니다.
 
-* **애플리케이션/사용자 디렉토리**
-* **MySQL 데이터베이스**
-
-두 가지 대상을 동시에 백업하도록 설계되었습니다.
-
-백업은 수동 실행도 가능하지만, 운영 환경에서는 자동화가 핵심입니다. 따라서 `crontab`을 활용하여 **매일 정오**에 자동 실행되도록 구성합니다.
-
----
-
-## 2. 백업 대상 설명
-
-### 📂 디렉토리
-
-* 경로: `/home/ubuntu/01.awk`
-* 용도: 서비스 실행에 필요한 스크립트, 설정 파일, 로그 등
-
-> **파일 시스템 백업의 필요성**
-> 데이터베이스만 덤프한다고 해서 운영 환경이 그대로 복원되는 것은 아닙니다.
-> 애플리케이션 코드, 설정 파일까지 같이 보관해야 “서비스 전체”를 복원할 수 있습니다.
+- **백업 방식**: `mysqldump` 기반 논리 백업 (Full Backup)  
+- **보관 구조**: 날짜별 디렉토리 생성 → 해당 날짜의 백업 파일 저장  
+- **자동화 도구**: `cron`을 활용하여 매일 새벽 4시에 실행  
 
 ---
 
-### 🗄 데이터베이스
+## 📂 디렉토리 구조
 
-* 이름: `sqld`
-* 테이블: `DEPT`, `EMP`
-* 특징: 조직 구조와 인사 정보를 포함한 전형적인 ERP 예제 스키마
-
-```sql
-CREATE TABLE DEPT (
-  DEPTNO DECIMAL(10),
-  DNAME  VARCHAR(14),
-  LOC    VARCHAR(13)
-);
-
-CREATE TABLE EMP (
-  EMPNO    DECIMAL(4) NOT NULL,
-  ENAME    VARCHAR(10),
-  JOB      VARCHAR(9),
-  MGR      DECIMAL(4),
-  HIREDATE DATE,
-  SAL      DECIMAL(7,2),
-  COMM     DECIMAL(7,2),
-  DEPTNO   DECIMAL(2)
-);
 ```
 
-> **DB 백업의 필요성**
-> MySQL은 운영체제 오류나 디스크 장애 발생 시 데이터를 잃을 수 있습니다.
-> `mysqldump`를 이용하면 구조와 데이터가 SQL 형태로 저장되어, 다른 서버에서도 동일한 DB를 쉽게 복원할 수 있습니다.
-
----
-
-## 3. 백업 방식과 원리
-
-### 1단계: 디렉토리 압축
-
-* `tar -czf`를 이용하여 지정한 디렉토리를 `.tar.gz`로 압축
-* 백업 시점의 파일 상태가 그대로 보관
-
-### 2단계: MySQL 덤프
-
-* `mysqldump`로 지정한 DB를 `.sql` 파일로 추출
-* DB 구조 + 데이터 INSERT 문까지 기록됨
-
-### 3단계: SQL 압축 및 정리
-
-* `.sql` 파일을 `.tar.gz`로 압축
-* 원본 `.sql` 삭제 → 저장 공간 절약
-
-### 4단계: 로그 출력
-
-* 각 단계 성공 여부를 사용자에게 알림
-
----
-
-## 4. 자동화 (Crontab)
-
-### 등록 방법
-
-1. Crontab 편집
-
-   ```bash
-   crontab -e
-   ```
-2. 새벽 2시 실행
-
-   ```
-   0 2 * * * /home/ubuntu/backup.sh >> /home/ubuntu/backup.log 2>&1
-   ```
-
-* `0 2 * * *` → 매일 2:00 실행
-* `>> ... 2>&1` → 표준 출력과 에러 로그를 파일에 저장
-
-### 장점
-
-* 사람이 직접 명령어를 실행할 필요 없음
-* 항상 같은 시점(정오)에 백업이 쌓여 관리 편리
-* 로그 파일을 통해 실패 여부 확인 가능
-
----
-
-## 5. 백업 파일 관리
-
-### 저장 경로
+mysql-backup/
+├── 20250908
+│ └── mysql_backup_20250908_165701.tar.gz
+├── mysql-backup.sh
+└── mysql-backup-log.log
 
 ```
-/home/ubuntu/backups/
- ├── dir_backup_20250908_120000.tar.gz
- ├── mysql_backup_20250908_120000.tar.gz
- ├── dir_backup_20250909_120000.tar.gz
- └── mysql_backup_20250909_120000.tar.gz
-```
 
-### 보관 정책
 
-* 무한정 보관 시 디스크 공간 부족 위험
-* 일반적으로 **7일\~30일 단위 보관 정책** 권장
 
-예시: 7일 지난 백업 삭제
+- `YYYYMMDD/` : 날짜별 백업 디렉토리  
+- `mysql_backup_YYYYMMDD_HHMMSS.tar.gz` : 압축된 SQL 덤프 파일  
+- `mysql-backup.sh` : 백업 실행 스크립트  
+- `mysql-backup-log.log` : 자동화 로그 파일  
 
+---
+
+## ⚙️ 스크립트 설명 (`mysql-backup.sh`)
 ```bash
-find /home/ubuntu/backups -type f -mtime +7 -exec rm {} \;
+#!/bin/bash
+
+MYSQL_USER="root"      
+MYSQL_PASS="root"      
+MYSQL_DB="sqld"        
+BACKUP_BASE="/home/ubuntu/03.sh/mysql-backup"
+
+DATE=$(date +%Y%m%d_%H%M%S)
+DAY=$(date +%Y%m%d)
+BACKUP_PATH="$BACKUP_BASE/$DAY"
+
+DB_DUMP="mysql_backup_$DATE.sql"
+DB_TAR="mysql_backup_$DATE.tar.gz"
+
+mkdir -p "$BACKUP_PATH"
+
+# 1. DB 덤프
+mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" > "$BACKUP_PATH/$DB_DUMP"
+
+# 2. 덤프 파일 압축
+tar -czf "$BACKUP_PATH/$DB_TAR" -C "$BACKUP_PATH" "$DB_DUMP"
+rm "$BACKUP_PATH/$DB_DUMP"
+
+echo "[$DAY] MySQL DB 백업 완료: $BACKUP_PATH/$DB_TAR"
+
 ```
 
+
 ---
 
-## 6. 복원 방법
 
-### 디렉토리 복원
+## ⏰ 자동화 설정 (cron)
 
-```bash
-tar -xzf dir_backup_날짜.tar.gz -C /
+매일 새벽 4시에 스크립트가 실행되도록 설정했습니다.
+
+```cron
+0 4 * * * /home/ubuntu/03.sh/mysql-backup/mysql-backup.sh >> /home/ubuntu/03.sh/mysql-backup/mysql-backup-log.log 2>&1
 ```
 
-→ 지정된 시점의 파일을 그대로 복구
+### ✅ 실행 주기: 하루 1회
 
-### DB 복원
 
-```bash
-gunzip < mysql_backup_날짜.tar.gz | mysql -u root -p 데이터베이스이름
+사원 데이터베이스는 부서, 급여, 보너스 등 **민감한 인사·재무 정보를 포함**하고 있습니다. <br>
+이러한 데이터는 기업 운영 및 법적 준거성에 직접적으로 연결되므로, 데이터 손실 허용 범위(RPO, Recovery Point Objective)를 1일로 설정하는 것이 합리적입니다. <br>
+즉, 장애 발생 시 복구 가능한 시점이 최대 하루 전까지라는 것을 의미하며, 이를 위해 하루 한 번 전체 논리 백업을 수행합니다. <br>
+
+<img width="1095" height="258" alt="image" src="https://github.com/user-attachments/assets/fc5b154c-7ed2-4605-8b62-07714157724c" />
+
+###### 출처 : https://www.percona.com/blog/mysql-backup-and-recovery-best-practices/
+
+
+
+### ✅ 실행 시간: 새벽 4시
+
+
+백업 작업은 CPU, 메모리, 디스크 I/O에 큰 부하를 줄 수 있으므로 업무 시간대에는 서비스 성능 저하를 유발할 위험이 있습니다. <br>
+따라서 **사용자 접속 및 DB 변경 가능성이 가장 낮은 시간대를 선택**해야 합니다. <br>
+글로벌 및 국내 인터넷 트래픽 분석 자료에 따르면, 새벽 3~5시 구간은 전체 접속률이 가장 낮은 시간대로 보고되고 있으며, 이 시각은 사원 데이터베이스의 변경 가능성도 사실상 거의 없습니다. <br>
+이에 따라 백업을 매일 새벽 4시에 실행하도록 설정했습니다. <br>
+
+<img width="854" height="121" alt="image" src="https://github.com/user-attachments/assets/7ddb727a-e439-4fc6-9edb-e9cf3a7820e1" />
+
+###### 출처 : https://blog.bytescrum.com/how-to-automate-mysql-database-backups-on-any-operating-system
+
+---
+
+## 💾 백업 파일 사용 방법 (복구 절차)
+
+1. 백업 파일 압축 해제
+
+```
+tar -xzf mysql_backup_20250908_165701.tar.gz
 ```
 
-→ DB 구조와 데이터를 그대로 복원
+→ mysql_backup_20250908_165701.sql 생성됨
 
----
+2. 기존 DB로 복원
 
-## 7. 운영 시 주의사항
+```
+mysql -u root -p sqld < mysql_backup_20250908_165701.sql
+```
 
-1. **MySQL 계정 권한**
 
-   * `mysqldump` 실행 권한 필요
-   * 권한이 부족하면 덤프에 실패
+3. 새로운 DB에 복원 (예: sqld_restore)
 
-2. **보안**
+```
+mysql -u root -p -e "CREATE DATABASE sqld_restore;"
+mysql -u root -p sqld_restore < mysql_backup_20250908_165701.sql
+```
 
-   * 백업 파일에는 **민감 데이터** 포함
-   * 접근 권한 제한 필요 → `chmod 600 *.tar.gz`
-
-3. **스토리지 관리**
-
-   * 백업 디스크와 운영 디스크를 분리하는 것이 이상적
-   * 가능하다면 원격지(예: S3, NFS, 별도 서버)에 2차 백업 권장
-
----
-
-## 8. 확장 아이디어
-
-* **암호화** : GPG로 tar.gz 파일 암호화
-* **알림 연동** : Slack, 이메일로 백업 성공/실패 보고
-* **멀티 DB 지원** : 여러 DB를 배열로 지정해 순차 덤프
-* **Docker/Kubernetes 환경 지원** : 컨테이너 내부 MySQL 덤프 자동화
-
----
-
-## 9. 결론
-
-DB\_backup은 **파일 + DB 동시 백업**이라는 단순하지만 강력한 구조를 제공합니다.
-운영 환경에서는 여기에 **보관 정책, 암호화, 원격 백업**을 더해 **신뢰할 수 있는 백업 체계**를 완성할 수 있습니다.
-
-👉 문석님, 여기서 제가 `backup.sh`를 최종적으로 정리하면서 **“7일 이상 된 백업 자동 삭제” 기능까지 통합**해드릴까요?
